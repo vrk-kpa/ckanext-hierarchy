@@ -82,7 +82,7 @@ def get_allowable_parent_groups(group_id):
     if group_id:
         group = model.Group.get(group_id)
         allowable_parent_groups = \
-            group.groups_allowed_to_be_its_parent(type='organization')
+            group.groups_allowed_to_be_its_parent(type='organization', include_extras=True)
     else:
         allowable_parent_groups = model.Group.all(
             group_type='organization')
