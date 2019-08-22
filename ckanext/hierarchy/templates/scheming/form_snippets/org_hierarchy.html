@@ -1,5 +1,5 @@
 <div class="control-group">
-  <label class="control-label" for="field-parent">{{ _("Parent") }}</label>
+  <label class="control-label" for="field-parent">{{ h.scheming_language_text(field.label) }}</label>
   <div class="controls">
     <select id="field-parent" name="groups__0__name" data-module="autocomplete">
       {% set selected_parent = (data.get('groups') or [{'name': ''}])[0]['name'] %} {{ selected_parent }}
