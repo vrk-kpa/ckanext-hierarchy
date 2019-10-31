@@ -3,6 +3,7 @@ import ckan.plugins as p
 import ckan.logic as logic
 from ckanext.hierarchy.model import GroupTreeNode
 from ckan import model
+from ckan.authz import is_sysadmin
 from sqlalchemy import func, and_
 from sqlalchemy.orm import aliased
 
@@ -31,11 +32,35 @@ def _accumulate_dataset_counts(groups, members):
     return dataset_count_map
 
 
-def _fetch_all_organizations(force_root_ids=None):
+def _fetch_all_organizations(user=None, force_root_ids=None):
+    if is_sysadmin(user):
+        non_approved = []
+    else:
+        # Find names of all non-approved organizations
+        query = (model.Session.query(model.Group.name)
+                 .filter(model.Group.state == u'active')
+                 .filter(model.Group.approval_status != u'approved'))
+
+        non_approved = set(result[0] for result in query.all())
+
+        # If user is logged in, retain only names of organizations the user is not a member of
+        if user:
+            query = (model.Session.query(model.Group.name)
+                     .join(model.Member, model.Member.group_id == model.Group.id)
+                     .join(model.User, model.User.id == model.Member.table_id)
+                     .filter(model.Member.state == u'active')
+                     .filter(model.Member.table_name == u'user')
+                     .filter(model.User.name == user)
+                     .filter(model.Group.state == u'active')
+                     .filter(model.Group.approval_status != u'approved'))
+            memberships = set(result[0] for result in query.all())
+            non_approved -= memberships
+
     groups_with_counts = model.Session.query(model.Group, func.count(model.Package.id)) \
         .outerjoin(model.Package, and_(model.Package.owner_org == model.Group.id, model.Package.state == u'active')) \
         .filter(model.Group.state == u'active') \
         .filter(model.Group.is_organization.is_(True)) \
+        .filter(model.Group.name.notin_(non_approved)) \
         .group_by(model.Group.id) \
         .all()  # noqa
 
@@ -45,6 +70,7 @@ def _fetch_all_organizations(force_root_ids=None):
         .join(parent_group, model.Member.group_id == parent_group.id) \
         .filter(model.Group.state == u'active') \
         .filter(model.Group.is_organization.is_(True)) \
+        .filter(model.Member.table_name == u'group') \
         .filter(model.Member.state == u'active')\
         .filter(parent_group.state == u'active') \
         .filter(parent_group.is_organization.is_(True)) \
@@ -113,7 +139,7 @@ def group_tree(context, data_dict):
 
     :returns: list of top-level GroupTreeNodes
     '''
-    top_level_groups, children = _fetch_all_organizations()
+    top_level_groups, children = _fetch_all_organizations(user=context.get('user'))
     sorted_top_level_groups = sorted(top_level_groups, key=lambda g: g.name)
     result = [_group_tree_branch(group, children=children.get(group.id, []))
               for group in sorted_top_level_groups]
@@ -144,7 +170,7 @@ def group_tree_section(context, data_dict):
 
     if group.state == u'active':
         # An optimal solution would be a recursive SQL query just for this, but this is fast enough for <10k organizations
-        roots, children = _fetch_all_organizations(force_root_ids=[group.id])
+        roots, children = _fetch_all_organizations(user=context.get('user'), force_root_ids=[group.id])
         return _group_tree_branch(roots[0], highlight_group_name=group.name, children=children.get(group.id, []))
     else:
         group.subtree_dataset_count = 0
@@ -152,7 +178,7 @@ def group_tree_section(context, data_dict):
         return _group_tree_branch(group)
 
 
-def _nest_group_tree_list(group_tree_list, group_tree_leaf):
+def _nest_group_tree_list(group_tree_list, group_tree_leaf, user=None):
     '''Returns a tree branch composed by nesting the groups in the list.
 
     :param group_tree_list: list of groups to build a tree, first is root
@@ -160,9 +186,7 @@ def _nest_group_tree_list(group_tree_list, group_tree_leaf):
     '''
     root_node = None
     last_node = None
-    log.debug(group_tree_list)
     for group in group_tree_list:
-        log.debug(group)
         node = GroupTreeNode(
             {'id': group.id,
              'name': group.name,
@@ -177,7 +201,7 @@ def _nest_group_tree_list(group_tree_list, group_tree_leaf):
 
     if group.state == u'active':
         # An optimal solution would be a recursive SQL query just for this, but this is fast enough for <10k organizations
-        roots, children = _fetch_all_organizations(force_root_ids=[group.id])
+        roots, children = _fetch_all_organizations(user=user, force_root_ids=[group.id])
         return _group_tree_branch(roots[0], highlight_group_name=group.name, children=children.get(group.id, []))
     else:
         group.subtree_dataset_count = 0
