@@ -40,7 +40,8 @@ def group_tree_filter(organizations, group_tree_list, highlight=False):
 
 def group_tree_section(id_, type_='organization', include_parents=True, include_siblings=True):
     return p.toolkit.get_action('group_tree_section')(
-            {'user': c.user, 'include_parents': include_parents, 'include_siblings': include_siblings}, {'id': id_, 'type': type_, })
+            {'user': c.user, 'include_parents': include_parents, 'include_siblings': include_siblings},
+            {'id': id_, 'type': type_, })
 
 
 def group_tree_parents(id_, type_='organization'):
