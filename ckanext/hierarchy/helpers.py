@@ -1,10 +1,10 @@
 import ckan.plugins as p
 import ckan.model as model
-from ckan.common import request
+from ckan.common import request, c
 
 
 def group_tree(organizations=[], type_='organization'):
-    full_tree_list = p.toolkit.get_action('group_tree')({}, {'type': type_})
+    full_tree_list = p.toolkit.get_action('group_tree')({'user': c.user}, {'type': type_})
 
     if not organizations:
         return full_tree_list
@@ -40,7 +40,7 @@ def group_tree_filter(organizations, group_tree_list, highlight=False):
 
 def group_tree_section(id_, type_='organization', include_parents=True, include_siblings=True):
     return p.toolkit.get_action('group_tree_section')(
-        {'include_parents': include_parents, 'include_siblings': include_siblings}, {'id': id_, 'type': type_, })
+            {'user': c.user, 'include_parents': include_parents, 'include_siblings': include_siblings}, {'id': id_, 'type': type_, })
 
 
 def group_tree_parents(id_, type_='organization'):
